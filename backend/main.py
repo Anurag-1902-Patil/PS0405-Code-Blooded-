@@ -58,6 +58,32 @@ async def analyze_report(file: UploadFile = File(...)):
         logger.error(f"API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+from pydantic import BaseModel
+
+class ExportPDFRequest(BaseModel):
+    analysis: dict
+    patient_name: str = "Patient"
+    age: int = 30
+    gender: str = "M"
+
+@app.post("/export/pdf")
+async def export_pdf(req: ExportPDFRequest):
+    try:
+        pdf_bytes = generate_pdf(
+            req.analysis,
+            patient_name=req.patient_name,
+            patient_age=req.age,
+            patient_gender=req.gender,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="MediSense_Report.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"PDF Export Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/analyze/pdf")
 async def analyze_and_download_pdf(

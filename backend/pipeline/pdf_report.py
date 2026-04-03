@@ -210,6 +210,33 @@ def _score_dial_drawing(score: int, grade: str, color) -> Drawing:
                  textAnchor="middle", fontName="Helvetica-Bold"))
     return d
 
+def _bar_gauge_drawing(pos: float, status: str) -> Drawing:
+    """Draw a horizontal vector bar gauge for the test results."""
+    width, height = 80, 8
+    d = Drawing(width, 16)
+    
+    # Background Track
+    d.add(Rect(0, 4, width, height, rx=3, ry=3, fillColor=colors.HexColor("#E5E7EB"), strokeColor=None))
+    
+    # Normal Zone (Middle 30%)
+    d.add(Rect(width * 0.35, 4, width * 0.30, height, fillColor=C_GREEN_BG, strokeColor=None))
+    
+    # Text labels
+    d.add(String(0, 14, "L", fontSize=5, fillColor=colors.HexColor("#9CA3AF"), fontName="Helvetica-Bold"))
+    d.add(String(width-4, 14, "H", fontSize=5, fillColor=colors.HexColor("#9CA3AF"), fontName="Helvetica-Bold"))
+    
+    # Marker
+    try:
+        pos = max(0.05, min(0.95, float(pos)))
+    except (ValueError, TypeError):
+        pos = 0.5
+        
+    cx, cy = pos * width, 4 + height / 2
+    tc, bc = _status_colors(status)
+    
+    d.add(Circle(cx, cy, 5, fillColor=tc, strokeColor=colors.white, strokeWidth=1))
+    return d
+
 # ─────────────────────────────────────────────────────────────
 # Style helpers
 # ─────────────────────────────────────────────────────────────
@@ -240,6 +267,11 @@ def _styles():
                           fontName="Helvetica-Bold", leading=11),
         "cell_center": S("cell_center",fontSize=8, textColor=colors.HexColor("#1F2937"),
                           fontName="Helvetica", leading=11, alignment=TA_CENTER),
+        "cell_right":  S("cell_right",fontSize=8, textColor=colors.HexColor("#1F2937"),
+                          fontName="Courier", leading=11, alignment=TA_RIGHT),
+        "cell_right_bold":S("cell_right_bold",fontSize=8, textColor=C_NAVY,
+                          fontName="Courier-Bold", leading=11, alignment=TA_RIGHT),
+        "gauge":       S("gauge",fontSize=8, textColor=C_NAVY, fontName="Courier-Bold", leading=11, alignment=TA_CENTER),
         "link":        S("link",    fontSize=8,  textColor=C_BLUE,
                           fontName="Helvetica",  leading=13),
         "disclaimer":  S("disclaimer",fontSize=7,textColor=C_GREY,
@@ -295,6 +327,9 @@ def generate_pdf(
     score     = analysis.get("health_score", 0)
     grade     = analysis.get("health_grade", "—")
     summary   = analysis.get("health_summary", "")
+    doctors_narrative = analysis.get("doctors_narrative", summary)
+    path_to_normal = analysis.get("path_to_normal", {})
+    curated_resources = analysis.get("curated_resources", {})
     score_sum = analysis.get("score_summary", "")
     dq        = analysis.get("doctor_questions", [])
     breakdown = analysis.get("score_breakdown", {})
@@ -381,21 +416,6 @@ def generate_pdf(
         ("ALIGN", (1,0), (1,-1), "CENTER"),
     ]))
 
-    # Score summary text
-    score_summary_para = Paragraph(score_sum, S["summary_box"])
-    summary_box = Table(
-        [[score_summary_para]],
-        colWidths=[200]
-    )
-    summary_box.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0), (-1,-1), C_LIGHT_BLUE),
-        ("TOPPADDING",    (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-        ("LEFTPADDING",   (0,0), (-1,-1), 10),
-        ("RIGHTPADDING",  (0,0), (-1,-1), 10),
-        ("BOX",           (0,0), (-1,-1), 0.5, C_BLUE),
-    ]))
-
     # Category breakdown
     breakdown_rows = [["Category", "Score", "Status"]]
     for cat, sc in sorted(breakdown.items(), key=lambda x: x[1]):
@@ -428,8 +448,8 @@ def generate_pdf(
         bk_table = Paragraph("No category breakdown available.", S["small"])
 
     score_layout = Table(
-        [[dial, stat_table, summary_box, bk_table]],
-        colWidths=[115, 100, 215, 185]
+        [[dial, stat_table, bk_table]],
+        colWidths=[115, 120, 288] # Total 523 (A4 width without margins)
     )
     score_layout.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
@@ -439,10 +459,10 @@ def generate_pdf(
     story.append(score_layout)
     story.append(Spacer(1, 10))
 
-    # ── HEALTH SUMMARY ────────────────────────────────────────
-    story.append(Paragraph("Health Summary", S["h1"]))
+    # ── DOCTOR'S NARRATIVE ────────────────────────────────────
+    story.append(Paragraph("Doctor's Narrative — Causal Analysis", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
-    sum_table = Table([[Paragraph(summary, S["body"])]], colWidths=[W - 36*mm])
+    sum_table = Table([[Paragraph(doctors_narrative, S["body"])]], colWidths=[W - 36*mm])
     sum_table.setStyle(TableStyle([
         ("BACKGROUND",    (0,0), (-1,-1), C_LIGHT_BLUE),
         ("TOPPADDING",    (0,0), (-1,-1), 10),
@@ -516,9 +536,8 @@ def generate_pdf(
     story.append(Spacer(1, 5))
 
     # Table header
-    col_w = [120, 52, 52, 100, 65, 55, 115]  # total ≈ 559
-    headers = ["Test Name", "Your Value", "Normal Range", "Status",
-               "Category", "Deviation", "Plain Explanation"]
+    col_w = [110, 60, 80, 50, 70, 120]  # total = 490
+    headers = ["Parameter", "Your Result", "Normal Range", "Deviation", "Urgency", "Visual Gauge"]
     hdr_row = [Paragraph(f"<b>{h}</b>", ParagraphStyle(
                     "th", fontSize=8, textColor=C_WHITE,
                     fontName="Helvetica-Bold", alignment=TA_CENTER)) for h in headers]
@@ -533,8 +552,7 @@ def generate_pdf(
         ("BOTTOMPADDING", (0,0), (-1,-1), 4),
         ("LEFTPADDING",   (0,0), (-1,-1), 5),
         ("RIGHTPADDING",  (0,0), (-1,-1), 5),
-        ("VALIGN",        (0,0), (-1,-1), "TOP"),
-        ("ALIGN",         (1,0), (5,-1), "CENTER"),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
     ]
 
     # Sort: critical first, then high/low, then normal
@@ -549,27 +567,26 @@ def generate_pdf(
         tc, bc   = _status_colors(status)
         dev      = t.get("deviation_pct", 0)
         dev_str  = f"{dev:.1f}%" if dev > 0 else "—"
-        label    = STATUS_LABEL.get(status, status)
+        label    = STATUS_LABEL.get(status, status).upper()
+        gauge_pos = t.get("gauge_position", 0.5)
+
+        val_style = S["cell_right_bold"] if status != "normal" else S["cell_right"]
 
         row = [
             Paragraph(f"<b>{t.get('test_name','')}</b>", S["cell_bold"]),
-            Paragraph(f"{t.get('value','')} {t.get('unit','')}", S["cell_center"]),
-            Paragraph(t.get("reference_range", "—"), S["cell_center"]),
+            Paragraph(f"{t.get('value','')} {t.get('unit','')}", val_style),
+            Paragraph(t.get("reference_range", "—"), S["cell_right"]),
+            Paragraph(dev_str, val_style),
             Paragraph(label, ParagraphStyle("st", fontSize=8, textColor=tc,
                            fontName="Helvetica-Bold", alignment=TA_CENTER)),
-            Paragraph(t.get("category","—"), S["cell_center"]),
-            Paragraph(dev_str, ParagraphStyle("dev", fontSize=8,
-                           textColor=tc if dev > 0 else C_GREEN,
-                           fontName="Helvetica-Bold" if dev > 0 else "Helvetica",
-                           alignment=TA_CENTER)),
-            Paragraph(t.get("explanation","—"), S["cell"]),
+            _bar_gauge_drawing(gauge_pos, status),
         ]
         table_data.append(row)
 
         # Colour abnormal rows
         if status != "normal":
-            row_styles.append(("BACKGROUND", (0, row_idx), (5, row_idx), bc))
-            row_styles.append(("TEXTCOLOR",  (3, row_idx), (3, row_idx), tc))
+            row_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), bc))
+            row_styles.append(("TEXTCOLOR",  (0, row_idx), (-1, row_idx), tc))
 
     results_table = Table(table_data, colWidths=col_w, repeatRows=1)
     results_table.setStyle(TableStyle(row_styles))
@@ -777,96 +794,79 @@ def generate_pdf(
         ]))
         story.append(dq_table)
 
-    # ── RESOURCES & LINKS ─────────────────────────────────────
-    story.append(PageBreak())
-    story.append(Paragraph("Trusted Resources & Further Reading", S["h1"]))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
-    story.append(Paragraph(
-        "These links are curated based on YOUR specific findings. "
-        "All sources are from recognised medical authorities.",
-        S["small"]))
-    story.append(Spacer(1, 8))
+    # ── CURATED RESOURCE LIBRARY ──────────────────────────────
+    if curated_resources:
+        story.append(PageBreak())
+        story.append(Paragraph("Curated Resource Library", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+        story.append(Paragraph(
+            "These links are AI-curated based on YOUR specific findings from reputable sources.",
+            S["small"]))
+        story.append(Spacer(1, 8))
+        
+        yt = curated_resources.get("youtube", [])
+        articles = curated_resources.get("articles", [])
+        
+        res_rows = [["Type", "Recommended Resource"]]
+        for vid in yt:
+            vurl = vid.get('url', '')
+            res_rows.append([
+                Paragraph("<b>Video</b>", S["cell"]),
+                Paragraph(f"{vid.get('title','')} - <link href=\"{vurl}\" color=\"#1A56DB\">Watch Here</link>", S["link"])
+            ])
+        for art in articles:
+            aurl = art.get('url', '')
+            res_rows.append([
+                Paragraph("<b>Article</b>", S["cell"]),
+                Paragraph(f"{art.get('title','')} - <link href=\"{aurl}\" color=\"#1A56DB\">Read Here</link>", S["link"])
+            ])
 
-    resources = _pick_resources(tests, patterns)
+        if len(res_rows) > 1:
+            res_table = Table(res_rows, colWidths=[60, W-36*mm-60])
+            res_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,0), C_NAVY),
+                ("TEXTCOLOR",     (0,0), (-1,0), C_WHITE),
+                ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",      (0,0), (-1,-1), 9),
+                ("TOPPADDING",    (0,0), (-1,-1), 6),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+                ("LEFTPADDING",   (0,0), (-1,-1), 8),
+                ("GRID",          (0,0), (-1,-1), 0.4, C_BORDER),
+                ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_WHITE, C_GREY_BG]),
+                ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ]))
+            story.append(res_table)
 
-    res_rows = [["Resource", "Link"]]
-    for label, url in resources:
-        res_rows.append([
-            Paragraph(label, S["cell"]),
-            Paragraph(f'<link href="{url}" color="#1A56DB">{url}</link>', S["link"]),
-        ])
+    # ── PATH TO NORMAL ─────────────────────────────────────────
+    if path_to_normal:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("Path to Normal — Action Plan", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+        
+        diet_swaps = path_to_normal.get("dietary_swaps", [])
+        activity = path_to_normal.get("activity_prescription", "")
 
-    res_table = Table(res_rows, colWidths=[200, W-36*mm-200])
-    res_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0), (-1,0), C_NAVY),
-        ("TEXTCOLOR",     (0,0), (-1,0), C_WHITE),
-        ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0), (-1,-1), 8),
-        ("TOPPADDING",    (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-        ("LEFTPADDING",   (0,0), (-1,-1), 8),
-        ("GRID",          (0,0), (-1,-1), 0.4, C_BORDER),
-        ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_WHITE, C_GREY_BG]),
-        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-    ]))
-    story.append(res_table)
+        sub_rows = []
+        if diet_swaps:
+            sub_rows.append([Paragraph("<b>Specific Dietary Swaps</b>", S["body_bold"])])
+            for swap in diet_swaps:
+                sub_rows.append([Paragraph(f"• {swap}", S["body"])])
+        
+        if activity:
+            sub_rows.append([Spacer(1, 4)])
+            sub_rows.append([Paragraph("<b>Activity Prescription</b>", S["body_bold"])])
+            sub_rows.append([Paragraph(activity, S["body"])])
 
-    # ── LIFESTYLE TIPS TABLE ──────────────────────────────────
-    story.append(Spacer(1, 14))
-    story.append(Paragraph("General Health Improvement Guide", S["h1"]))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
-
-    tips_data = [
-        ["Area", "Current Goal", "Why It Matters", "How To Start"],
-        ["🥗 Diet",
-         "Eat whole foods:\nvegetables, legumes,\nwhole grains, lean protein",
-         "Improves cholesterol,\nblood sugar, iron,\nand liver health",
-         "Replace 1 processed meal/day.\nAdd 1 cup of leafy greens daily."],
-        ["🏃 Exercise",
-         "150 min/week moderate\nor 75 min vigorous",
-         "Lowers blood sugar,\nimproves heart health,\nboosts Vitamin D",
-         "Start with 20-min walk daily.\nGradually increase intensity."],
-        ["☀️ Sunlight",
-         "15–20 min of direct\nsunlight daily",
-         "Primary source of\nVitamin D production",
-         "Morning walk between\n8–10 AM for best results."],
-        ["💧 Hydration",
-         "2.5–3.5 litres of\nwater daily",
-         "Supports kidney function,\nblood pressure, energy",
-         "Keep a 1L bottle at your desk.\nDrink 1 glass every 2 hours."],
-        ["😴 Sleep",
-         "7–9 hours per night,\nconsistent schedule",
-         "Regulates hormones,\nblood sugar, immunity",
-         "Set fixed sleep/wake time.\nAvoid screens 1 hr before bed."],
-        ["🚭 Avoid",
-         "Reduce alcohol,\nstop smoking,\nlimit processed food",
-         "Major drivers of liver\ndamage, cancer risk,\ncholesterol issues",
-         "Set 1 reduction goal per month.\nSeek support if needed."],
-        ["📅 Follow-up",
-         "Retest in 3–6 months\nfor abnormal values",
-         "Tracks improvement,\ndetects changes early",
-         "Book appointment now.\nBring this report to doctor."],
-    ]
-
-    tips_table = Table(tips_data, colWidths=[60, 120, 130, 145])
-    tips_style = [
-        ("BACKGROUND",    (0,0), (-1,0), C_NAVY),
-        ("TEXTCOLOR",     (0,0), (-1,0), C_WHITE),
-        ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-        ("FONTNAME",      (0,1), (0,-1), "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0), (-1,-1), 8),
-        ("TEXTCOLOR",     (0,1), (0,-1), C_NAVY),
-        ("TOPPADDING",    (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-        ("LEFTPADDING",   (0,0), (-1,-1), 7),
-        ("RIGHTPADDING",  (0,0), (-1,-1), 7),
-        ("GRID",          (0,0), (-1,-1), 0.4, C_BORDER),
-        ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_WHITE, C_GREY_BG]),
-        ("VALIGN",        (0,0), (-1,-1), "TOP"),
-        ("ALIGN",         (0,0), (-1,0), "CENTER"),
-    ]
-    tips_table.setStyle(TableStyle(tips_style))
-    story.append(tips_table)
+        if sub_rows:
+            path_table = Table(sub_rows, colWidths=[W - 36*mm])
+            path_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,-1), C_LIGHT_BLUE),
+                ("TOPPADDING",    (0,0), (-1,-1), 8),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+                ("LEFTPADDING",   (0,0), (-1,-1), 12),
+                ("BOX",           (0,0), (-1,-1), 0.5, C_BLUE),
+            ]))
+            story.append(path_table)
 
     # ── NORMAL VALUES REFERENCE TABLE ─────────────────────────
     if normal:
@@ -904,10 +904,9 @@ def generate_pdf(
     story.append(Spacer(1, 16))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
     story.append(Paragraph(
-        "DISCLAIMER: This report is generated by MediSense AI for informational purposes only. "
-        "It does not constitute medical advice, diagnosis, or treatment. "
-        "Always consult a qualified healthcare professional before making any health decisions. "
-        "AI-generated analyses may contain errors — verify all values with your original lab report.",
+        "DISCLAIMER: This report is generated by MediSense AI for educational purposes only. "
+        "It does not constitute a final diagnosis, medical advice, or treatment. "
+        "Always consult a qualified healthcare professional before making any health decisions.",
         S["disclaimer"]
     ))
     story.append(Spacer(1, 4))

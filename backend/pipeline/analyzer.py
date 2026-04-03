@@ -8,17 +8,41 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = """You are a senior clinical pathologist. 
-Return ONLY a valid JSON object.
-Required keys: health_score (int), health_grade (string), health_summary (string), tests (list)."""
+SYSTEM_PROMPT = """You are a Senior Medical Consultant specializing in Clinical Pathology and Patient Communication.
+Your task is to transform a raw medical report into a high-literacy, professional "Patient Health Blueprint".
+Maintain a professional, authoritative, yet reassuring tone.
+Return ONLY a valid JSON object. Do not include markdown formatting like ```json."""
 
 ANALYSIS_PROMPT = """Analyze this lab report for a {age} year old {gender_full} patient.
-JSON Structure:
+
+JSON Structure Requirements:
 {{
-  "health_score": 0-100,
+  "health_score": 0,
   "health_grade": "Excellent/Good/Fair/Poor",
-  "health_summary": "3-4 sentence summary...",
-  "tests": [{{ "test_name": "Name", "value": "Value", "status": "normal/high/low" }}]
+  "health_summary": "Short 1-2 sentence intro summary.",
+  "doctors_narrative": "A professional causal analysis explaining 'what is what' and 'what leads to what'. Explain interactions between markers (e.g. high Triglycerides + borderline Glucose -> Metabolic syndrome risk).",
+  "tests": [
+    {{
+      "test_name": "Name",
+      "value": "Value",
+      "unit": "Clean string representation of unit (e.g., mg/dL, 10^9/L, mmol/L)",
+      "status": "normal/high/low/critical_high/critical_low",
+      "reference_range": "Normal range",
+      "deviation_pct": 0.0,
+      "explanation": "Jargon-checked explanation. Explain complex terms with analogies (e.g., 'Think of eGFR as the speed limit').",
+      "category": "Category",
+      "severity": "normal/mild/moderate/critical",
+      "gauge_position": 0.5
+    }}
+  ],
+  "path_to_normal": {{
+    "dietary_swaps": ["Direct replacements (e.g., 'Replace red meat with plant-based proteins to reduce kidney load')"],
+    "activity_prescription": "Specific exercise types (e.g., Aerobic vs Resistance) based on findings."
+  }},
+  "curated_resources": {{
+    "youtube": [{{"title": "Title (e.g. Mayo Clinic: Understanding Cholesterol)", "url": "Actual or constructed search url"}}],
+    "articles": [{{"title": "American Heart Association / NIDDK article", "url": "Actual URL"}}]
+  }}
 }}
 
 REPORT: {report_text}"""
