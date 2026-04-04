@@ -42,10 +42,15 @@ export default function DownloadPDF({ analysisData }: { analysisData: any }) {
 
   return (
     <button
-      className="matte-button-3d w-full"
+      className="zen-btn-primary w-full"
       onClick={handleDownload}
       disabled={status === 'loading'}
-      style={{ opacity: status === 'loading' ? 0.7 : 1 }}
+      style={{
+        padding: '14px 24px',
+        borderRadius: '16px',
+        fontSize: '0.875rem',
+        opacity: status === 'loading' ? 0.7 : 1,
+      }}
     >
       {status === 'loading' ? (
         <>

@@ -17,57 +17,65 @@ export default function SmartArticles({ resources }: { resources: any }) {
 
   return (
     <div>
-      <h3 className="section-header">Curated For You</h3>
-      <p className="section-subtitle" style={{ marginBottom: '16px' }}>Articles and videos matched to your results</p>
+      <h3 className="font-semibold text-base mb-1" style={{ color: 'var(--zen-text)' }}>Curated For You</h3>
+      <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
+        Articles and videos matched to your results
+      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {allItems.slice(0, 6).map((item: any, i: number) => (
+      {/* Horizontal scroll */}
+      <div className="zen-h-scroll">
+        {allItems.slice(0, 8).map((item: any, i: number) => (
           <motion.a
             key={i}
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="clay-card p-4 block group"
+            className="zen-glass-solid group block"
+            style={{
+              borderRadius: '24px',
+              width: '260px',
+              minHeight: '140px',
+              padding: '20px',
+              textDecoration: 'none',
+            }}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 + i * 0.06, duration: 0.35 }}
+            whileHover={{ scale: 1.02, y: -2 }}
           >
-            <div className="flex items-start gap-3">
-              {/* Icon */}
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: item.type === 'video' ? 'var(--terracotta-bg)' : 'var(--sage-bg)',
-                  border: item.type === 'video'
-                    ? '1px solid rgba(196,99,75,0.15)'
-                    : '1px solid rgba(124,154,114,0.15)',
-                }}
-              >
-                {item.type === 'video'
-                  ? <PlayCircle className="w-4 h-4" style={{ color: 'var(--terracotta-light)' }} />
-                  : <FileText className="w-4 h-4" style={{ color: 'var(--sage-light)' }} />
-                }
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`resource-badge ${item.type === 'video' ? 'badge-video' : 'badge-article'}`}>
-                    {item.type === 'video' ? 'Video' : 'Article'}
-                  </span>
-                </div>
-                <p
-                  className="text-xs font-medium leading-snug group-hover:underline"
-                  style={{ color: 'var(--cream-dim)', fontFamily: 'Inter' }}
-                >
-                  {item.title}
-                </p>
-              </div>
-
-              <ExternalLink
-                className="w-3.5 h-3.5 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ color: 'var(--slate-light)' }}
-              />
+            {/* Type icon */}
+            <div
+              className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3"
+              style={{
+                background: item.type === 'video' ? 'var(--zen-critical-bg)' : 'var(--zen-normal-bg)',
+              }}
+            >
+              {item.type === 'video'
+                ? <PlayCircle className="w-5 h-5" style={{ color: 'var(--zen-critical-text)' }} />
+                : <FileText className="w-5 h-5" style={{ color: 'var(--zen-normal-text)' }} />
+              }
             </div>
+
+            {/* Badge */}
+            <span
+              className={`zen-pill ${item.type === 'video' ? 'zen-pill-critical' : 'zen-pill-normal'}`}
+              style={{ fontSize: '0.6rem', padding: '2px 8px', marginBottom: '8px', display: 'inline-flex' }}
+            >
+              {item.type === 'video' ? 'Video' : 'Article'}
+            </span>
+
+            {/* Title */}
+            <p
+              className="text-xs font-medium leading-snug mt-2 group-hover:underline"
+              style={{ color: 'var(--zen-text-secondary)' }}
+            >
+              {item.title}
+            </p>
+
+            <ExternalLink
+              className="w-3.5 h-3.5 mt-3 opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--zen-text-faint)' }}
+            />
           </motion.a>
         ))}
       </div>

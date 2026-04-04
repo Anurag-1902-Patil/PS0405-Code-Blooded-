@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Copy, CheckCircle, Loader2, AlertTriangle, ChevronDown, Download, FileText } from 'lucide-react';
 import HealthScoreGauge from '../../components/dashboard/HealthScoreGauge';
 import HumanReadableTests from '../../components/dashboard/HumanReadableTests';
 import TrendRibbon from '../../components/dashboard/TrendRibbon';
@@ -12,6 +12,7 @@ import AIInsightCards from '../../components/dashboard/AIInsightCards';
 import DrNearby from '../../components/dashboard/DrNearby';
 import SmartArticles from '../../components/dashboard/SmartArticles';
 import DownloadPDF from '../../components/dashboard/DownloadPDF';
+import PathToNormal from '../../components/dashboard/PathToNormal';
 import UploadPanel from '../../components/dashboard/UploadPanel';
 import CanvasSequence from "@/components/CanvasSequence";
 
@@ -54,7 +55,7 @@ const MOCK_DATA = {
 };
 
 /* ──────────────────────────────────────────── */
-/* LOADING SEQUENCE (preserved exactly)         */
+/* LOADING SEQUENCE                             */
 /* ──────────────────────────────────────────── */
 const LoadingSequence = () => {
   const [step, setStep] = useState(0);
@@ -102,166 +103,256 @@ const LoadingSequence = () => {
 };
 
 /* ──────────────────────────────────────────── */
-/* RESULTS VIEW (new 3D Clinical Matte layout)  */
+/* SECTION NAV                                  */
 /* ──────────────────────────────────────────── */
-function ResultsView({ results, onReset }: { results: any; onReset: () => void }) {
-  const allTests = results.all_tests || results.tests || [];
-  const doctorQuestions = results.doctor_questions || [];
+const SECTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'biomarkers', label: 'Biomarkers' },
+  { id: 'insights', label: 'AI Insights' },
+  { id: 'plan', label: 'Action Plan' },
+  { id: 'doctors', label: "Doctor's Prep" },
+  { id: 'resources', label: 'Resources' },
+];
+
+function SectionNav() {
+  const [active, setActive] = useState('overview');
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActive(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0.1 }
+    );
+
+    SECTIONS.forEach(({ id }) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="results-bg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-20">
-        {/* Health Score */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
-        >
-          <HealthScoreGauge data={{ ...results, all_tests: allTests }} />
-        </motion.div>
+    <div className="zen-section-nav">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-0 overflow-x-auto">
+        {SECTIONS.map(({ id, label }) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className={active === id ? 'active' : ''}
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-        {/* Main Grid: 2/3 + 1/3 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT COLUMN — Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Trend Ribbon Chart */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-            >
-              <TrendRibbon tests={allTests} />
-            </motion.div>
+/* ──────────────────────────────────────────── */
+/* RESULTS VIEW — Zen Medical Bento Grid        */
+/* ──────────────────────────────────────────── */
+function ResultsView({ results, onReset, user, onLogout }: { results: any; onReset: () => void; user: { name: string; email: string }; onLogout: () => void }) {
+  const allTests = results.all_tests || results.tests || [];
+  const doctorQuestions = results.doctor_questions || [];
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const displayedQuestions = showAllQuestions ? doctorQuestions : doctorQuestions.slice(0, 3);
 
-            {/* Human-Readable Tests */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25, duration: 0.4 }}
-            >
-              <h3 className="section-header">Your Biomarkers</h3>
-              <p className="section-subtitle" style={{ marginBottom: '16px' }}>Tap any marker to see a plain-English explanation</p>
-              <HumanReadableTests tests={allTests} />
-            </motion.div>
-
-            {/* Doctor Questions */}
-            {doctorQuestions.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35, duration: 0.4 }}
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h3 className="section-header" style={{ marginBottom: '2px' }}>Questions for Your Doctor</h3>
-                    <p className="section-subtitle">Bring these to your next appointment</p>
-                  </div>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(doctorQuestions.join('\n'))}
-                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{
-                      background: 'var(--frost)',
-                      color: 'var(--cream-dim)',
-                      border: '1px solid var(--frost-border)',
-                      fontFamily: 'Inter',
-                    }}
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy All
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {doctorQuestions.map((q: string, i: number) => (
-                    <div
-                      key={i}
-                      className="matte-card p-4 flex gap-3 items-start cursor-pointer group"
-                      onClick={() => navigator.clipboard.writeText(q)}
-                    >
-                      <span
-                        className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{
-                          background: 'var(--frost)',
-                          color: 'var(--slate-light)',
-                          border: '1px solid var(--frost-border)',
-                        }}
-                      >
-                        {i + 1}
-                      </span>
-                      <p className="flex-1 text-sm leading-relaxed" style={{ color: 'var(--cream-dim)', fontFamily: 'Inter' }}>
-                        {q}
-                      </p>
-                      <Copy
-                        className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ color: 'var(--slate-light)' }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Smart Articles */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45, duration: 0.4 }}
-            >
-              <SmartArticles resources={results.curated_resources} />
-            </motion.div>
+  return (
+    <div className="zen-results">
+      {/* Light Navbar */}
+      <nav
+        className="w-full px-6 py-4 flex justify-between items-center sticky top-0 z-50"
+        style={{
+          background: 'rgba(248, 249, 250, 0.88)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--zen-border)',
+        }}
+      >
+        <Link href="/" className="font-bold text-xl tracking-tight transition-colors" style={{ color: 'var(--zen-text)' }}>
+          MediSense AI
+        </Link>
+        <div className="flex items-center space-x-4">
+          <div className="flex flex-col items-end">
+            <span className="text-sm font-medium" style={{ color: 'var(--zen-text)' }}>{user.name}</span>
+            <span className="text-xs" style={{ color: 'var(--zen-text-faint)' }}>{user.email}</span>
           </div>
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg"
+            style={{
+              background: 'var(--zen-brand)',
+              color: 'var(--zen-brand-text)',
+              border: '1px solid var(--zen-border)',
+            }}
+          >
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+          <button onClick={onLogout} className="zen-btn-ghost" style={{ fontSize: '0.8rem', padding: '8px 16px' }}>
+            Log Out
+          </button>
+        </div>
+      </nav>
 
-          {/* RIGHT COLUMN — Sidebar */}
-          <div className="space-y-6">
-            {/* AI Insight Cards */}
+      {/* Section Nav */}
+      <SectionNav />
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-20">
+
+        {/* ─── SECTION: Overview (Health Halo) ─── */}
+        <section id="overview" className="mb-12 scroll-mt-32">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <HealthScoreGauge data={{ ...results, all_tests: allTests }} />
+          </motion.div>
+        </section>
+
+        {/* ─── SECTION: Biomarkers + Trend ─── */}
+        <section id="biomarkers" className="mb-12 scroll-mt-32">
+          {/* Trend Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.4 }}
+            className="mb-8"
+          >
+            <TrendRibbon tests={allTests} />
+          </motion.div>
+
+          {/* Biomarker Matrix */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+          >
+            <h3 className="font-semibold text-base mb-1" style={{ color: 'var(--zen-text)' }}>Your Biomarkers</h3>
+            <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
+              Tap any card to see a plain-English explanation
+            </p>
+            <HumanReadableTests tests={allTests} />
+          </motion.div>
+        </section>
+
+        {/* ─── SECTION: AI Insights + Action Plan ─── */}
+        <section id="insights" className="mb-12 scroll-mt-32">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* AI Insight Carousel */}
             <motion.div
-              initial={{ opacity: 0, x: 12 }}
+              initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2, duration: 0.4 }}
+              transition={{ delay: 0.25, duration: 0.4 }}
             >
               <AIInsightCards data={results} />
             </motion.div>
 
             {/* Path to Normal */}
-            {results.path_to_normal && (
-              <motion.div
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3, duration: 0.4 }}
-                className="matte-card p-5"
-              >
-                <h3 className="section-header" style={{ marginBottom: '12px' }}>Path to Normal</h3>
-                {results.path_to_normal.dietary_swaps && results.path_to_normal.dietary_swaps.length > 0 && (
-                  <div className="mb-4">
-                    <span className="text-xs font-semibold uppercase tracking-wider block mb-2" style={{ color: 'var(--sage)', fontFamily: 'Inter' }}>
-                      Dietary Swaps
-                    </span>
-                    <ul className="space-y-1.5">
-                      {results.path_to_normal.dietary_swaps.map((s: string, i: number) => (
-                        <li key={i} className="text-xs leading-relaxed flex gap-2" style={{ color: 'var(--cream-dim)', fontFamily: 'Inter' }}>
-                          <span style={{ color: 'var(--sage-light)' }}>→</span>
-                          {s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {results.path_to_normal.activity_prescription && (
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider block mb-2" style={{ color: 'var(--amber-matte)', fontFamily: 'Inter' }}>
-                      Activity Rx
-                    </span>
-                    <p className="text-xs leading-relaxed" style={{ color: 'var(--cream-dim)', fontFamily: 'Inter' }}>
-                      {results.path_to_normal.activity_prescription}
-                    </p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* Dr. Nearby */}
             <motion.div
+              id="plan"
+              className="scroll-mt-32"
               initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+            >
+              <PathToNormal pathData={results.path_to_normal} />
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ─── SECTION: Doctor's Prep ─── */}
+        {doctorQuestions.length > 0 && (
+          <section id="doctors" className="mb-12 scroll-mt-32">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35, duration: 0.4 }}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="font-semibold text-base" style={{ color: 'var(--zen-text)' }}>
+                    Questions for Your Doctor
+                  </h3>
+                  <p className="text-xs" style={{ color: 'var(--zen-text-faint)' }}>
+                    Bring these to your next appointment
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(doctorQuestions.join('\n'))}
+                    className="zen-btn-ghost"
+                    style={{ fontSize: '0.72rem', padding: '6px 12px' }}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy All
+                  </button>
+                  <button
+                    onClick={() => {/* triggers PDF download */}}
+                    className="zen-btn-primary"
+                    style={{ fontSize: '0.72rem', padding: '6px 12px', borderRadius: '10px' }}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Generate Report
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {displayedQuestions.map((q: string, i: number) => (
+                  <div
+                    key={i}
+                    className="zen-glass-solid p-4 flex gap-3 items-start cursor-pointer group"
+                    style={{ borderRadius: '14px' }}
+                    onClick={() => navigator.clipboard.writeText(q)}
+                  >
+                    <span
+                      className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: 'var(--zen-brand)', color: 'var(--zen-brand-text)' }}
+                    >
+                      {i + 1}
+                    </span>
+                    <p className="flex-1 text-sm leading-relaxed" style={{ color: 'var(--zen-text-secondary)' }}>
+                      {q}
+                    </p>
+                    <Copy
+                      className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ color: 'var(--zen-text-faint)' }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {doctorQuestions.length > 3 && (
+                <button
+                  onClick={() => setShowAllQuestions(!showAllQuestions)}
+                  className="zen-btn-ghost mt-3 mx-auto"
+                  style={{ display: 'flex', fontSize: '0.75rem' }}
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllQuestions ? 'rotate-180' : ''}`} />
+                  {showAllQuestions ? 'Show less' : `Show all ${doctorQuestions.length} questions`}
+                </button>
+              )}
+            </motion.div>
+          </section>
+        )}
+
+        {/* ─── SECTION: Specialists + Resources ─── */}
+        <section id="resources" className="mb-12 scroll-mt-32">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Specialists */}
+            <motion.div
+              initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4, duration: 0.4 }}
             >
@@ -270,40 +361,42 @@ function ResultsView({ results, onReset }: { results: any; onReset: () => void }
 
             {/* Download PDF */}
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.4 }}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.45, duration: 0.4 }}
+              className="flex flex-col justify-end"
             >
-              <DownloadPDF analysisData={results} />
+              <div className="zen-glass-solid p-6" style={{ borderRadius: '20px' }}>
+                <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--zen-text)' }}>
+                  Export Your Report
+                </h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
+                  Download a comprehensive PDF with all findings
+                </p>
+                <DownloadPDF analysisData={results} />
+              </div>
             </motion.div>
           </div>
-        </div>
+        </section>
+
+        {/* Resources Hub */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+          className="mb-12"
+        >
+          <SmartArticles resources={results.curated_resources} />
+        </motion.div>
 
         {/* Analyze Another */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.3 }}
-          className="mt-12 text-center"
+          className="text-center pt-4"
         >
-          <button
-            onClick={onReset}
-            className="px-8 py-3 rounded-xl text-sm font-semibold transition-colors"
-            style={{
-              background: 'transparent',
-              color: 'var(--slate-light)',
-              border: '1px solid var(--frost-border)',
-              fontFamily: 'Inter',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--frost)';
-              e.currentTarget.style.color = 'var(--cream)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'var(--slate-light)';
-            }}
-          >
+          <button onClick={onReset} className="zen-btn-ghost" style={{ padding: '12px 32px' }}>
             ← Analyze Another Report
           </button>
         </motion.div>
@@ -313,7 +406,7 @@ function ResultsView({ results, onReset }: { results: any; onReset: () => void }
 }
 
 /* ──────────────────────────────────────────── */
-/* MAIN DASHBOARD (auth/upload/loading preserved) */
+/* MAIN DASHBOARD                               */
 /* ──────────────────────────────────────────── */
 export default function Dashboard() {
   const router = useRouter();
@@ -377,7 +470,6 @@ export default function Dashboard() {
         }
         const data = await res.json();
 
-        // Normalize backend response
         data.all_tests = data.tests || [];
         data.doctor_questions = data.doctor_questions || [];
         if (data.doctor_questions.length === 0) {
@@ -406,133 +498,90 @@ export default function Dashboard() {
 
   if (!user) return <div className="min-h-screen bg-black" />;
 
-  /* ── Results View: completely different layout ── */
+  /* ── Results View: Zen Medical Light Theme ── */
   if (viewState === 'results' && results) {
-    return (
-      <div className="min-h-screen" style={{ background: 'var(--navy)' }}>
-        {/* Navbar (same styling but on navy bg) */}
-        <nav
-          className="w-full px-6 py-4 flex justify-between items-center sticky top-0 z-50"
-          style={{
-            background: 'rgba(27,38,59,0.92)',
-            backdropFilter: 'blur(12px)',
-            borderBottom: '1px solid var(--frost-border)',
-          }}
-        >
-          <Link href="/" className="font-bold text-xl tracking-tight transition-colors" style={{ color: 'var(--cream)', fontFamily: 'Inter' }}>
-            MediSense AI
+    return <ResultsView results={results} onReset={handleReset} user={user} onLogout={handleLogout} />;
+  }
+
+  /* ── Upload / Loading: Dark layout preserved ── */
+  return (
+    <div className="min-h-screen bg-[#050B18] text-white pb-20">
+      <CanvasSequence className="pointer-events-none" />
+
+      <div className="relative z-10">
+        {/* NAVBAR (preserved dark) */}
+        <nav className="w-full border-b border-white/10 px-6 py-4 flex justify-between items-center bg-[#050B18]/80 backdrop-blur-md sticky top-0 z-50">
+          <Link href="/" className="font-bold text-xl tracking-tight text-white/90 hover:text-white transition-colors">
+            MedReport AI
           </Link>
           <div className="flex items-center space-x-4">
             <div className="flex flex-col items-end">
-              <span className="text-sm font-medium" style={{ color: 'var(--cream)' }}>{user.name}</span>
-              <span className="text-xs" style={{ color: 'var(--slate-light)' }}>{user.email}</span>
+              <span className="text-sm font-medium">{user.name}</span>
+              <span className="text-xs text-white/50">{user.email}</span>
             </div>
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg"
-              style={{ background: 'var(--frost)', color: 'var(--cream)', border: '1px solid var(--frost-border)' }}
-            >
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-lg text-white">
               {user.name.charAt(0).toUpperCase()}
             </div>
             <button
               onClick={handleLogout}
-              className="text-sm px-4 py-2 rounded-lg transition-colors ml-4"
-              style={{
-                border: '1px solid var(--frost-border)',
-                color: 'var(--slate-light)',
-                fontFamily: 'Inter',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--frost)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              className="text-sm border border-white/20 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors ml-4"
             >
               Log Out
             </button>
           </div>
         </nav>
 
-        <ResultsView results={results} onReset={handleReset} />
-      </div>
-    );
-  }
-
-  /* ── Upload / Loading: original layout preserved ── */
-  return (
-    <div className="min-h-screen bg-[#050B18] text-white pb-20">
-      <CanvasSequence className="pointer-events-none" />
-      
-      <div className="relative z-10">
-        {/* NAVBAR (preserved) */}
-        <nav className="w-full border-b border-white/10 px-6 py-4 flex justify-between items-center bg-[#050B18]/80 backdrop-blur-md sticky top-0 z-50">
-        <Link href="/" className="font-bold text-xl tracking-tight text-white/90 hover:text-white transition-colors">
-          MedReport AI
-        </Link>
-        <div className="flex items-center space-x-4">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-medium">{user.name}</span>
-            <span className="text-xs text-white/50">{user.email}</span>
+        {/* BACKEND STATUS BANNER */}
+        {!isBackendOnline && (
+          <div className="w-full bg-amber-500/20 px-6 py-3 border-b border-amber-500/30 flex justify-center items-center text-amber-200">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            <span className="text-sm font-medium">⚠️ Backend offline — Demo Mode active</span>
           </div>
-          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-lg text-white">
-            {user.name.charAt(0).toUpperCase()}
-          </div>
-          <button 
-            onClick={handleLogout}
-            className="text-sm border border-white/20 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors ml-4"
-          >
-            Log Out
-          </button>
-        </div>
-      </nav>
+        )}
 
-      {/* BACKEND STATUS BANNER (preserved) */}
-      {!isBackendOnline && (
-        <div className="w-full bg-amber-500/20 px-6 py-3 border-b border-amber-500/30 flex justify-center items-center text-amber-200">
-          <AlertTriangle className="w-4 h-4 mr-2" />
-          <span className="text-sm font-medium">⚠️ Backend offline — Demo Mode active</span>
-        </div>
-      )}
-
-      {/* ERROR BANNER (preserved) */}
-      {errorBanner && viewState === 'upload' && (
-        <div className="max-w-xl mx-auto mt-8 flex justify-between items-center bg-red-500/10 border border-red-500/30 px-6 py-4 rounded-xl text-red-300">
-          <div className="flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-3" />
-            <span className="text-sm">{errorBanner}</span>
-          </div>
-          <button 
-            onClick={() => handleAnalyze(null, '30', 'Male', 'English', true)}
-            className="ml-4 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-          >
-            Switch to Demo Mode
-          </button>
-        </div>
-      )}
-
-      <main className="px-6 relative">
-        <AnimatePresence mode="wait">
-          {viewState === 'upload' && (
-            <motion.div
-              key="upload"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
+        {/* ERROR BANNER */}
+        {errorBanner && viewState === 'upload' && (
+          <div className="max-w-xl mx-auto mt-8 flex justify-between items-center bg-red-500/10 border border-red-500/30 px-6 py-4 rounded-xl text-red-300">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-3" />
+              <span className="text-sm">{errorBanner}</span>
+            </div>
+            <button
+              onClick={() => handleAnalyze(null, '30', 'Male', 'English', true)}
+              className="ml-4 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
             >
-              <UploadPanel onAnalyze={handleAnalyze} />
-            </motion.div>
-          )}
+              Switch to Demo Mode
+            </button>
+          </div>
+        )}
 
-          {viewState === 'loading' && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              <LoadingSequence />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+        <main className="px-6 relative">
+          <AnimatePresence mode="wait">
+            {viewState === 'upload' && (
+              <motion.div
+                key="upload"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <UploadPanel onAnalyze={handleAnalyze} />
+              </motion.div>
+            )}
+
+            {viewState === 'loading' && (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <LoadingSequence />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   );
