@@ -9,6 +9,48 @@ interface ChatMessage {
   content: string;
 }
 
+function renderChatMarkdown(text: string) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        if (!line.trim()) return null;
+        
+        let isBullet = false;
+        let cleanLine = line;
+        
+        // Check if line starts with bullet
+        if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+          isBullet = true;
+          cleanLine = line.trim().substring(2);
+        }
+        
+        // Parse bold
+        const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+        const mappedParts = parts.map((part, j) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={j} className="font-semibold text-[color:var(--zen-text)]">{part.slice(2, -2)}</strong>;
+          }
+          return <span key={j}>{part}</span>;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={i} className="flex gap-2 items-start ml-2">
+              <span className="mt-2 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-40" />
+              <span>{mappedParts}</span>
+            </div>
+          );
+        }
+        
+        return <div key={i}>{mappedParts}</div>;
+      })}
+    </div>
+  );
+}
+
 export default function ChatWidget({ analysisData }: { analysisData: any }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -144,7 +186,7 @@ export default function ChatWidget({ analysisData }: { analysisData: any }) {
                     className={`px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'rounded-2xl rounded-tr-sm text-white shadow-md' : 'rounded-2xl rounded-tl-sm bg-white shadow-sm'}`}
                     style={msg.role === 'user' ? { background: 'var(--zen-text)' } : { color: 'var(--zen-text-secondary)' }}
                   >
-                    {msg.content}
+                    {msg.role === 'model' ? renderChatMarkdown(msg.content) : msg.content}
                   </div>
                 </div>
               ))}
