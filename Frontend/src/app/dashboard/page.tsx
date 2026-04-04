@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, CheckCircle, Loader2, AlertTriangle, ChevronDown, Download, FileText } from 'lucide-react';
+import { Copy, CheckCircle, Loader2, AlertTriangle, ChevronDown, Download, FileText, Clock } from 'lucide-react';
 import HealthScoreGauge from '../../components/dashboard/HealthScoreGauge';
 import HumanReadableTests from '../../components/dashboard/HumanReadableTests';
 import TrendRibbon from '../../components/dashboard/TrendRibbon';
@@ -15,8 +15,7 @@ import DownloadPDF from '../../components/dashboard/DownloadPDF';
 import PathToNormal from '../../components/dashboard/PathToNormal';
 import UploadPanel from '../../components/dashboard/UploadPanel';
 import ChatWidget from '../../components/dashboard/ChatWidget';
-import ReportHistory from '../../components/dashboard/ReportHistory';
-import CompareView from '../../components/dashboard/CompareView';
+import PastReportsTab from '../../components/dashboard/PastReportsTab';
 import CanvasSequence from "@/components/CanvasSequence";
 
 /* ──────────────────────────────────────────── */
@@ -112,12 +111,13 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'plan', label: 'Action Plan' },
   { id: 'resources', label: 'Resources' },
+  { id: 'history', label: 'Past Reports' },
 ];
 
 /* ──────────────────────────────────────────── */
 /* RESULTS VIEW — Zen Medical Bento Grid        */
 /* ──────────────────────────────────────────── */
-function ResultsView({ results, onReset, user, onLogout }: { results: any; onReset: () => void; user: { name: string; email: string }; onLogout: () => void }) {
+function ResultsView({ results, onReset, user, onLogout, onViewReport }: { results: any; onReset: () => void; user: { name: string; email: string }; onLogout: () => void; onViewReport?: (r: any) => void }) {
   const allTests = results.all_tests || results.tests || [];
   const doctorQuestions = results.doctor_questions || [];
   const [showAllQuestions, setShowAllQuestions] = useState(false);
@@ -167,13 +167,14 @@ function ResultsView({ results, onReset, user, onLogout }: { results: any; onRes
           {TABS.map(({ id, label }) => (
             <button
               key={id}
-              className={`px-4 py-3 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap ${
+              className={`px-4 py-3 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
                 activeTab === id 
                 ? 'text-[var(--zen-brand-text)] border-[var(--zen-brand-solid)]' 
                 : 'text-[var(--zen-text-muted)] border-transparent hover:text-[var(--zen-text)] hover:border-gray-300'
               }`}
               onClick={() => setActiveTab(id)}
             >
+              {id === 'history' && <Clock className="w-3.5 h-3.5" />}
               {label}
             </button>
           ))}
@@ -289,6 +290,24 @@ function ResultsView({ results, onReset, user, onLogout }: { results: any; onRes
               </section>
             </motion.div>
           )}
+
+          {/* ─── TAB: Past Reports ─── */}
+          {activeTab === 'history' && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <PastReportsTab
+                userEmail={user.email}
+                onViewReport={(report) => {
+                  if (onViewReport) onViewReport(report);
+                }}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* Analyze Another */}
@@ -314,21 +333,9 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string, email: string } | null>(null);
   const [isBackendOnline, setIsBackendOnline] = useState(true);
-  const [viewState, setViewState] = useState<'upload' | 'loading' | 'results' | 'history' | 'compare'>('upload');
+  const [viewState, setViewState] = useState<'upload' | 'loading' | 'results'>('upload');
   const [results, setResults] = useState<any>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
-  const [compareData, setCompareData] = useState<[any, any] | null>(null);
-
-  const loadReports = async (email: string) => {
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/reports/${email}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSavedReports(data.reports || []);
-      }
-    } catch(e) {}
-  };
 
   useEffect(() => {
     const saved = localStorage.getItem('medreport_user');
@@ -340,7 +347,6 @@ export default function Dashboard() {
       const parsed = JSON.parse(saved);
       if (!parsed.name || !parsed.email) throw new Error('Invalid user');
       setUser(parsed);
-      loadReports(parsed.email);
     } catch (e) {
       localStorage.removeItem('medreport_user');
       router.push('/auth');
@@ -399,7 +405,6 @@ export default function Dashboard() {
         setTimeout(() => {
           setResults(data);
           setViewState('results');
-          if (user?.email) loadReports(user.email);
         }, 100);
       } catch (err: any) {
         console.error('Analysis error:', err);
@@ -418,27 +423,16 @@ export default function Dashboard() {
 
   /* ── Results View: Zen Medical Light Theme ── */
   if (viewState === 'results' && results) {
-    return <ResultsView results={results} onReset={handleReset} user={user} onLogout={handleLogout} />;
-  }
-
-  if (viewState === 'compare' && compareData) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA]">
-        <nav className="w-full px-6 py-4 flex justify-between items-center border-b" style={{ borderColor: 'var(--zen-border)' }}>
-          <Link href="/" className="font-bold text-xl tracking-tight" style={{ color: 'var(--zen-text)' }}>
-            MediSense AI
-          </Link>
-          <div className="flex items-center space-x-4">
-            <div className="flex flex-col items-end">
-              <span className="text-sm font-medium" style={{ color: 'var(--zen-text)' }}>{user.name}</span>
-            </div>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg" style={{ background: 'var(--zen-brand)', color: 'var(--zen-brand-text)' }}>
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-          </div>
-        </nav>
-        <CompareView reports={compareData} onBack={() => setViewState('history')} />
-      </div>
+      <ResultsView
+        results={results}
+        onReset={handleReset}
+        user={user}
+        onLogout={handleLogout}
+        onViewReport={(report: any) => {
+          setResults(report);
+        }}
+      />
     );
   }
 
@@ -504,29 +498,7 @@ export default function Dashboard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
               >
-                  <div className="flex justify-center mb-8 relative z-50">
-                    <button onClick={() => setViewState('history')} className="px-6 py-2 border border-white/20 bg-[var(--zen-brand-solid)] hover:opacity-90 rounded-full text-white transition-all text-sm font-semibold shadow-[0_0_15px_rgba(30,70,32,0.4)]">
-                      View Past Reports {savedReports.length > 0 ? `(${savedReports.length})` : ''}
-                    </button>
-                  </div>
                 <UploadPanel onAnalyze={handleAnalyze} />
-              </motion.div>
-            )}
-
-            {viewState === 'history' && (
-              <motion.div
-                key="history"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ReportHistory 
-                  reports={savedReports} 
-                  onSelectReport={(r) => { setResults(r); setViewState('results'); }} 
-                  onCompare={(r) => { setCompareData(r); setViewState('compare'); }}
-                  onBack={() => setViewState('upload')}
-                />
               </motion.div>
             )}
 

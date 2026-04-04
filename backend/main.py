@@ -9,6 +9,7 @@ from pipeline.analyzer import get_analyzer
 from pipeline.chatbot import get_chat_manager
 from pipeline.comparator import get_comparator
 from pipeline.pdf_report import generate_pdf
+from pipeline.comparison_pdf import generate_comparison_pdf
 from database import save_report, get_reports_by_user, get_report_by_id
 from loguru import logger
 
@@ -257,6 +258,28 @@ async def compare_reports(req: CompareRequest):
     except Exception as e:
         if isinstance(e, HTTPException): raise e
         logger.error(f"Compare API Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ComparisonPDFRequest(BaseModel):
+    report1: dict
+    report2: dict
+    comparison: dict
+
+@app.post("/export/comparison-pdf")
+async def export_comparison_pdf(req: ComparisonPDFRequest):
+    try:
+        pdf_bytes = generate_comparison_pdf(
+            req.report1,
+            req.report2,
+            req.comparison,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="MediSense_Comparison_Report.pdf"'},
+        )
+    except Exception as e:
+        logger.error(f"Comparison PDF Export Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
