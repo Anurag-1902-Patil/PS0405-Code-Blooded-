@@ -1,9 +1,102 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { UploadCloud, CheckCircle, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+/* ─────────── Dark Fluid Background ─────────── */
+function DarkFluidCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouse = useRef({ x: 0, y: 0 });
+  const blobs = useRef<{ x: number; y: number; vx: number; vy: number; r: number }[]>([]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resize = () => {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      canvas.width = parent.offsetWidth;
+      canvas.height = parent.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Seed 5 dark blobs at random positions
+    blobs.current = Array.from({ length: 5 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      r: 120 + Math.random() * 100,
+    }));
+
+    let raf: number;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      blobs.current.forEach((b) => {
+        // Gently attract towards cursor
+        const dx = mouse.current.x - b.x;
+        const dy = mouse.current.y - b.y;
+        b.vx += dx * 0.00008;
+        b.vy += dy * 0.00008;
+
+        // Dampen
+        b.vx *= 0.985;
+        b.vy *= 0.985;
+
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Wrap edges softly
+        if (b.x < -b.r) b.x = canvas.width + b.r;
+        if (b.x > canvas.width + b.r) b.x = -b.r;
+        if (b.y < -b.r) b.y = canvas.height + b.r;
+        if (b.y > canvas.height + b.r) b.y = -b.r;
+
+        // Draw dark radial gradient blob — very subtle dark tones
+        const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.04)');
+        grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.015)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    mouse.current.x = e.clientX - rect.left;
+    mouse.current.y = e.clientY - rect.top;
+  }, []);
+
+  return (
+    <div
+      className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none"
+      onMouseMove={handleMouseMove}
+      style={{ pointerEvents: 'none' }}
+    >
+      <canvas ref={canvasRef} className="w-full h-full" />
+    </div>
+  );
+}
+
+/* ─────────── Upload Panel ─────────── */
 export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | null, age: string, gender: string, language: string, isDemo: boolean) => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [age, setAge] = useState('');
@@ -11,6 +104,8 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
   const [language, setLanguage] = useState('English');
   const [isDemo, setIsDemo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mouse = useRef({ x: 0, y: 0 });
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -31,23 +126,43 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
 
   const isSubmitDisabled = !file && !isDemo;
 
-  return (
-    <div className="relative max-w-lg mx-auto mt-16">
-      {/* === Ambient depth blobs === */}
-      <div className="absolute -top-24 -left-32 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-20 -right-28 w-80 h-80 rounded-full bg-violet-500/[0.08] blur-3xl pointer-events-none" />
-      <div className="absolute -top-10 right-0 w-48 h-48 rounded-full bg-cyan-400/[0.08] blur-2xl pointer-events-none" />
+  /* Track mouse position for the fluid canvas */
+  const handleContainerMouseMove = useCallback((e: React.MouseEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    mouse.current.x = e.clientX - rect.left;
+    mouse.current.y = e.clientY - rect.top;
 
-      {/* === Glass Card === */}
+    // Forward to canvas blobs
+    const canvas = containerRef.current?.querySelector('canvas');
+    if (canvas) {
+      const canvasBlobs = (canvas as any).__blobs;
+      if (canvasBlobs) {
+        canvasBlobs.mouse.x = mouse.current.x;
+        canvasBlobs.mouse.y = mouse.current.y;
+      }
+    }
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative max-w-lg mx-auto mt-16"
+      onMouseMove={handleContainerMouseMove}
+    >
+      {/* === Glass Card with Dark Fluid === */}
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative backdrop-blur-xl bg-white/[0.04] border border-white/[0.08] border-t-white/20 rounded-3xl p-10"
+        className="relative overflow-hidden backdrop-blur-xl bg-white/[0.03] border border-white/[0.08] border-t-white/15 rounded-3xl p-10"
       >
+        {/* Dark Fluid Background Layer */}
+        <FluidBackground containerRef={containerRef} />
+
         {/* — Header — */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-1.5 bg-white/[0.08] border border-white/10 rounded-full px-4 py-1 mb-4">
+        <div className="relative z-10 text-center mb-8">
+          <div className="inline-flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.08] rounded-full px-4 py-1 mb-4">
             <span className="text-emerald-400 text-xs">●</span>
             <span className="text-xs text-white/50 font-medium">AI Analysis Ready</span>
           </div>
@@ -57,14 +172,14 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
 
         {/* — Drag Zone — */}
         <div
-          className="group border border-white/10 bg-white/[0.03] rounded-2xl p-10 text-center cursor-pointer hover:border-white/25 hover:bg-white/[0.06] hover:ring-1 hover:ring-white/10 transition-all duration-300 mb-8"
+          className="relative z-10 group border border-white/[0.08] bg-white/[0.02] rounded-2xl p-10 text-center cursor-pointer hover:border-white/20 hover:bg-white/[0.05] hover:ring-1 hover:ring-white/[0.08] transition-all duration-300 mb-8"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
         >
-          <UploadCloud className="w-10 h-10 text-white/30 mx-auto" />
-          <p className="text-white/70 font-medium mt-4">Drop your blood report here</p>
-          <p className="text-white/30 text-xs mt-1">PDF, JPG, or PNG · Max 20MB</p>
+          <UploadCloud className="w-10 h-10 text-white/25 mx-auto" />
+          <p className="text-white/60 font-medium mt-4">Drop your blood report here</p>
+          <p className="text-white/25 text-xs mt-1">PDF, JPG, or PNG · Max 20MB</p>
           <input
             type="file"
             ref={fileInputRef}
@@ -81,7 +196,7 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
         </div>
 
         {/* — Form Fields — */}
-        <div className="flex flex-col gap-5 mb-6">
+        <div className="relative z-10 flex flex-col gap-5 mb-6">
           {/* Age */}
           <div>
             <label className="block text-xs text-white/40 font-medium mb-1.5">Age</label>
@@ -91,7 +206,7 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
               min="1" max="120"
               value={age}
               onChange={e => setAge(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder:text-white/20 focus:border-white/30 focus:bg-white/[0.06] transition-all outline-none"
+              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3.5 text-white placeholder:text-white/20 focus:border-white/20 focus:bg-white/[0.05] transition-all outline-none"
             />
           </div>
 
@@ -105,8 +220,8 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
                   onClick={() => setGender(g)}
                   className={`py-3 rounded-xl font-medium transition-all duration-200 border ${
                     gender === g
-                      ? 'bg-white/10 border-white/25 text-white'
-                      : 'bg-white/[0.04] border-white/10 text-white/40 hover:border-white/20 hover:text-white/60'
+                      ? 'bg-white/10 border-white/20 text-white'
+                      : 'bg-white/[0.03] border-white/[0.08] text-white/40 hover:border-white/15 hover:text-white/60'
                   }`}
                 >
                   {g === 'Male' ? '♂ ' : '♀ '}{g}
@@ -122,7 +237,7 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
               <select
                 value={language}
                 onChange={e => setLanguage(e.target.value)}
-                className="w-full appearance-none bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-white/30 focus:bg-white/[0.06] transition-all outline-none pr-10"
+                className="w-full appearance-none bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3.5 text-white focus:border-white/20 focus:bg-white/[0.05] transition-all outline-none pr-10"
               >
                 {['English', 'Hindi', 'Marathi', 'Tamil', 'Telugu', 'Bengali'].map(lang => (
                   <option key={lang} value={lang} className="bg-neutral-900 text-white">{lang}</option>
@@ -134,7 +249,7 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
         </div>
 
         {/* — Demo Mode — */}
-        <div className="flex items-center justify-between py-3 border-t border-white/[0.06] mt-2 mb-6">
+        <div className="relative z-10 flex items-center justify-between py-3 border-t border-white/[0.06] mt-2 mb-6">
           <div>
             <p className="text-sm text-white/60">Demo Mode</p>
             <p className="text-xs text-white/30">Skip upload, load sample data</p>
@@ -151,15 +266,123 @@ export default function UploadPanel({ onAnalyze }: { onAnalyze: (file: File | nu
         <button
           onClick={() => onAnalyze(file, age, gender, language, isDemo)}
           disabled={isSubmitDisabled}
-          className={`w-full rounded-2xl py-4 font-semibold transition-all duration-200 ${
+          className={`relative z-10 w-full rounded-2xl py-4 font-semibold transition-all duration-200 ${
             isSubmitDisabled
               ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
-              : 'bg-white text-black hover:bg-white/90 shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_40px_rgba(255,255,255,0.25)]'
+              : 'bg-white text-black hover:bg-white/90 shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-[0_0_40px_rgba(255,255,255,0.2)]'
           }`}
         >
           Analyze Report &rarr;
         </button>
       </motion.div>
     </div>
+  );
+}
+
+/* ─────────── Fluid Background (canvas inside card) ─────────── */
+function FluidBackground({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const blobsRef = useRef<{ x: number; y: number; vx: number; vy: number; r: number; phase: number }[]>([]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resize = () => {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      canvas.width = parent.offsetWidth;
+      canvas.height = parent.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Seed dark blobs
+    blobsRef.current = Array.from({ length: 6 }, (_, i) => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: 100 + Math.random() * 140,
+      phase: i * 1.2,
+    }));
+
+    // Listen to mouse on the outer container so it works even over form fields
+    const container = containerRef.current;
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current.x = e.clientX - rect.left;
+      mouseRef.current.y = e.clientY - rect.top;
+    };
+    container?.addEventListener('mousemove', onMouseMove);
+
+    let frame = 0;
+    let raf: number;
+
+    const draw = () => {
+      frame++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      blobsRef.current.forEach((b) => {
+        // Attract to mouse gently
+        const dx = mouseRef.current.x - b.x;
+        const dy = mouseRef.current.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const pull = Math.min(0.00015, 0.8 / (dist + 1));
+        b.vx += dx * pull;
+        b.vy += dy * pull;
+
+        // Organic sway
+        b.vx += Math.sin(frame * 0.008 + b.phase) * 0.02;
+        b.vy += Math.cos(frame * 0.006 + b.phase) * 0.02;
+
+        // Dampen
+        b.vx *= 0.988;
+        b.vy *= 0.988;
+
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Wrap edges
+        if (b.x < -b.r) b.x = canvas.width + b.r;
+        if (b.x > canvas.width + b.r) b.x = -b.r;
+        if (b.y < -b.r) b.y = canvas.height + b.r;
+        if (b.y > canvas.height + b.r) b.y = -b.r;
+
+        // Breathing radius
+        const breathR = b.r + Math.sin(frame * 0.012 + b.phase) * 15;
+
+        // Draw: very dark, subtle white/grey radial — like dark ink in water
+        const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, breathR);
+        grad.addColorStop(0, 'rgba(255,255,255,0.045)');
+        grad.addColorStop(0.35, 'rgba(255,255,255,0.02)');
+        grad.addColorStop(0.7, 'rgba(255,255,255,0.006)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, breathR, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+      container?.removeEventListener('mousemove', onMouseMove);
+    };
+  }, [containerRef]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full rounded-3xl pointer-events-none"
+      style={{ zIndex: 0 }}
+    />
   );
 }
