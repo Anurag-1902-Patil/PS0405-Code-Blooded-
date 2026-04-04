@@ -15,6 +15,8 @@ import DownloadPDF from '../../components/dashboard/DownloadPDF';
 import PathToNormal from '../../components/dashboard/PathToNormal';
 import UploadPanel from '../../components/dashboard/UploadPanel';
 import ChatWidget from '../../components/dashboard/ChatWidget';
+import ReportHistory from '../../components/dashboard/ReportHistory';
+import CompareView from '../../components/dashboard/CompareView';
 import CanvasSequence from "@/components/CanvasSequence";
 
 /* ──────────────────────────────────────────── */
@@ -312,9 +314,21 @@ export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string, email: string } | null>(null);
   const [isBackendOnline, setIsBackendOnline] = useState(true);
-  const [viewState, setViewState] = useState<'upload' | 'loading' | 'results'>('upload');
+  const [viewState, setViewState] = useState<'upload' | 'loading' | 'results' | 'history' | 'compare'>('upload');
   const [results, setResults] = useState<any>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [compareData, setCompareData] = useState<[any, any] | null>(null);
+
+  const loadReports = async (email: string) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/reports/${email}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSavedReports(data.reports || []);
+      }
+    } catch(e) {}
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('medreport_user');
@@ -326,6 +340,7 @@ export default function Dashboard() {
       const parsed = JSON.parse(saved);
       if (!parsed.name || !parsed.email) throw new Error('Invalid user');
       setUser(parsed);
+      loadReports(parsed.email);
     } catch (e) {
       localStorage.removeItem('medreport_user');
       router.push('/auth');
@@ -359,6 +374,8 @@ export default function Dashboard() {
       formData.append('gender', gender);
       formData.append('language', language);
 
+      if (user?.email) formData.append('user_email', user.email);
+
       try {
         const res = await fetch('http://127.0.0.1:8000/analyze', {
           method: 'POST',
@@ -382,6 +399,7 @@ export default function Dashboard() {
         setTimeout(() => {
           setResults(data);
           setViewState('results');
+          if (user?.email) loadReports(user.email);
         }, 100);
       } catch (err: any) {
         console.error('Analysis error:', err);
@@ -401,6 +419,27 @@ export default function Dashboard() {
   /* ── Results View: Zen Medical Light Theme ── */
   if (viewState === 'results' && results) {
     return <ResultsView results={results} onReset={handleReset} user={user} onLogout={handleLogout} />;
+  }
+
+  if (viewState === 'compare' && compareData) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA]">
+        <nav className="w-full px-6 py-4 flex justify-between items-center border-b" style={{ borderColor: 'var(--zen-border)' }}>
+          <Link href="/" className="font-bold text-xl tracking-tight" style={{ color: 'var(--zen-text)' }}>
+            MediSense AI
+          </Link>
+          <div className="flex items-center space-x-4">
+            <div className="flex flex-col items-end">
+              <span className="text-sm font-medium" style={{ color: 'var(--zen-text)' }}>{user.name}</span>
+            </div>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg" style={{ background: 'var(--zen-brand)', color: 'var(--zen-brand-text)' }}>
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        </nav>
+        <CompareView reports={compareData} onBack={() => setViewState('history')} />
+      </div>
+    );
   }
 
   /* ── Upload / Loading: Dark layout preserved ── */
@@ -465,7 +504,31 @@ export default function Dashboard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
               >
+                {savedReports.length > 0 && (
+                  <div className="flex justify-center mb-8 relative z-50">
+                    <button onClick={() => setViewState('history')} className="px-6 py-2 border border-white/20 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all text-sm font-semibold shadow-lg">
+                      View Past Reports ({savedReports.length})
+                    </button>
+                  </div>
+                )}
                 <UploadPanel onAnalyze={handleAnalyze} />
+              </motion.div>
+            )}
+
+            {viewState === 'history' && (
+              <motion.div
+                key="history"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ReportHistory 
+                  reports={savedReports} 
+                  onSelectReport={(r) => { setResults(r); setViewState('results'); }} 
+                  onCompare={(r) => { setCompareData(r); setViewState('compare'); }}
+                  onBack={() => setViewState('upload')}
+                />
               </motion.div>
             )}
 

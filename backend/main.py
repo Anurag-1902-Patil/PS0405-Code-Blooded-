@@ -7,7 +7,9 @@ import io
 import pypdf
 from pipeline.analyzer import get_analyzer
 from pipeline.chatbot import get_chat_manager
+from pipeline.comparator import get_comparator
 from pipeline.pdf_report import generate_pdf
+from database import save_report, get_reports_by_user, get_report_by_id
 from loguru import logger
 
 app = FastAPI(title="MediSense AI API", version="3.0.0")
@@ -62,6 +64,8 @@ class MedicalPattern(BaseModel):
     matched_tests: List[str]
 
 class AnalysisResponse(BaseModel):
+    id: Optional[str] = None
+    created_at: Optional[str] = None
     health_score: int
     health_grade: str
     health_summary: str
@@ -81,6 +85,9 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage] = []
     context: dict
 
+class CompareRequest(BaseModel):
+    report1_id: str
+    report2_id: str
 
 @app.get("/")
 def home():
@@ -92,6 +99,7 @@ async def analyze_report(
     age: int = Form(30),
     gender: str = Form("Male"),
     language: str = Form("English"),
+    user_email: Optional[str] = Form(None),
 ):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -113,10 +121,37 @@ async def analyze_report(
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
 
+        if user_email:
+            try:
+                save_report(user_email, result)
+            except Exception as db_err:
+                logger.error(f"Failed to save report to DB: {db_err}")
+
         return result
 
     except Exception as e:
         logger.error(f"API Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/reports/{user_email}")
+async def get_user_reports(user_email: str):
+    try:
+        reports = get_reports_by_user(user_email)
+        return {"reports": reports}
+    except Exception as e:
+        logger.error(f"DB Error getting reports: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/report/{report_id}")
+async def get_single_report(report_id: str):
+    try:
+        report = get_report_by_id(report_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return {"report": report}
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        logger.error(f"DB Error getting report {report_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
@@ -202,6 +237,27 @@ async def analyze_and_download_pdf(
         logger.error(f"PDF Export Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/compare")
+async def compare_reports(req: CompareRequest):
+    try:
+        report1 = get_report_by_id(req.report1_id)
+        report2 = get_report_by_id(req.report2_id)
+        
+        if not report1 or not report2:
+            raise HTTPException(status_code=404, detail="One or both reports not found")
+            
+        comparator = get_comparator()
+        result = comparator.compare(report1, report2)
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+            
+        return {"comparison": result, "report1": report1, "report2": report2}
+        
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        logger.error(f"Compare API Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
