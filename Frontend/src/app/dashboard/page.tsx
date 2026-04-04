@@ -504,13 +504,11 @@ export default function Dashboard() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
               >
-                {savedReports.length > 0 && (
                   <div className="flex justify-center mb-8 relative z-50">
-                    <button onClick={() => setViewState('history')} className="px-6 py-2 border border-white/20 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all text-sm font-semibold shadow-lg">
-                      View Past Reports ({savedReports.length})
+                    <button onClick={() => setViewState('history')} className="px-6 py-2 border border-white/20 bg-[var(--zen-brand-solid)] hover:opacity-90 rounded-full text-white transition-all text-sm font-semibold shadow-[0_0_15px_rgba(30,70,32,0.4)]">
+                      View Past Reports {savedReports.length > 0 ? `(${savedReports.length})` : ''}
                     </button>
                   </div>
-                )}
                 <UploadPanel onAnalyze={handleAnalyze} />
               </motion.div>
             )}
