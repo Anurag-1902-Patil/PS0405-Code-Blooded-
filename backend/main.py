@@ -6,6 +6,7 @@ from typing import List, Optional
 import io
 import pypdf
 from pipeline.analyzer import get_analyzer
+from pipeline.chatbot import get_chat_manager
 from pipeline.pdf_report import generate_pdf
 from loguru import logger
 
@@ -71,6 +72,16 @@ class AnalysisResponse(BaseModel):
     curated_resources: CuratedResources
     recommended_specialists: Optional[List[Specialist]] = []
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = []
+    context: dict
+
+
 @app.get("/")
 def home():
     return {"status": "online", "engine": "Gemini 3 Flash"}
@@ -106,6 +117,19 @@ async def analyze_report(
 
     except Exception as e:
         logger.error(f"API Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat")
+async def chat_interaction(req: ChatRequest):
+    try:
+        chatbot = get_chat_manager()
+        history_dicts = [{"role": msg.role, "content": msg.content} for msg in req.history]
+        result = chatbot.chat(req.message, history_dicts, req.context)
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+        return {"reply": result["reply"]}
+    except Exception as e:
+        logger.error(f"Chat API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 from pydantic import BaseModel

@@ -14,6 +14,7 @@ import SmartArticles from '../../components/dashboard/SmartArticles';
 import DownloadPDF from '../../components/dashboard/DownloadPDF';
 import PathToNormal from '../../components/dashboard/PathToNormal';
 import UploadPanel from '../../components/dashboard/UploadPanel';
+import ChatWidget from '../../components/dashboard/ChatWidget';
 import CanvasSequence from "@/components/CanvasSequence";
 
 /* ──────────────────────────────────────────── */
@@ -105,58 +106,11 @@ const LoadingSequence = () => {
 /* ──────────────────────────────────────────── */
 /* SECTION NAV                                  */
 /* ──────────────────────────────────────────── */
-const SECTIONS = [
+const TABS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'biomarkers', label: 'Biomarkers' },
-  { id: 'insights', label: 'AI Insights' },
   { id: 'plan', label: 'Action Plan' },
-  { id: 'doctors', label: "Doctor's Prep" },
   { id: 'resources', label: 'Resources' },
 ];
-
-function SectionNav() {
-  const [active, setActive] = useState('overview');
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActive(entry.target.id);
-          }
-        });
-      },
-      { rootMargin: '-80px 0px -60% 0px', threshold: 0.1 }
-    );
-
-    SECTIONS.forEach(({ id }) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div className="zen-section-nav">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-0 overflow-x-auto">
-        {SECTIONS.map(({ id, label }) => (
-          <a
-            key={id}
-            href={`#${id}`}
-            className={active === id ? 'active' : ''}
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-          >
-            {label}
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ──────────────────────────────────────────── */
 /* RESULTS VIEW — Zen Medical Bento Grid        */
@@ -165,10 +119,12 @@ function ResultsView({ results, onReset, user, onLogout }: { results: any; onRes
   const allTests = results.all_tests || results.tests || [];
   const doctorQuestions = results.doctor_questions || [];
   const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const displayedQuestions = showAllQuestions ? doctorQuestions : doctorQuestions.slice(0, 3);
 
   return (
-    <div className="zen-results">
+    <div className="zen-results relative">
+      <ChatWidget analysisData={results} />
       {/* Light Navbar */}
       <nav
         className="w-full px-6 py-4 flex justify-between items-center sticky top-0 z-50"
@@ -203,191 +159,135 @@ function ResultsView({ results, onReset, user, onLogout }: { results: any; onRes
         </div>
       </nav>
 
-      {/* Section Nav */}
-      <SectionNav />
+      {/* Tab Nav */}
+      <div className="zen-section-nav">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-2 overflow-x-auto">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              className={`px-4 py-3 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap ${
+                activeTab === id 
+                ? 'text-[var(--zen-brand-text)] border-[var(--zen-brand-solid)]' 
+                : 'text-[var(--zen-text-muted)] border-transparent hover:text-[var(--zen-text)] hover:border-gray-300'
+              }`}
+              onClick={() => setActiveTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-20">
-
-        {/* ─── SECTION: Overview (Health Halo) ─── */}
-        <section id="overview" className="mb-12 scroll-mt-32">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <HealthScoreGauge data={{ ...results, all_tests: allTests }} />
-          </motion.div>
-        </section>
-
-        {/* ─── SECTION: Biomarkers + Trend ─── */}
-        <section id="biomarkers" className="mb-12 scroll-mt-32">
-          {/* Trend Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.4 }}
-            className="mb-8"
-          >
-            <TrendRibbon tests={allTests} />
-          </motion.div>
-
-          {/* Biomarker Matrix */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.4 }}
-          >
-            <h3 className="font-semibold text-base mb-1" style={{ color: 'var(--zen-text)' }}>Your Biomarkers</h3>
-            <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
-              Tap any card to see a plain-English explanation
-            </p>
-            <HumanReadableTests tests={allTests} />
-          </motion.div>
-        </section>
-
-        {/* ─── SECTION: AI Insights + Action Plan ─── */}
-        <section id="insights" className="mb-12 scroll-mt-32">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* AI Insight Carousel */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-20 min-h-[70vh]">
+        
+        <AnimatePresence mode="wait">
+          {/* ─── TAB: Overview ─── */}
+          {activeTab === 'overview' && (
             <motion.div
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.25, duration: 0.4 }}
-            >
-              <AIInsightCards data={results} />
-            </motion.div>
-
-            {/* Path to Normal */}
-            <motion.div
-              id="plan"
-              className="scroll-mt-32"
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3, duration: 0.4 }}
-            >
-              <PathToNormal pathData={results.path_to_normal} />
-            </motion.div>
-          </div>
-        </section>
-
-        {/* ─── SECTION: Doctor's Prep ─── */}
-        {doctorQuestions.length > 0 && (
-          <section id="doctors" className="mb-12 scroll-mt-32">
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              key="overview"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35, duration: 0.4 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
             >
-              <div className="flex justify-between items-center mb-4">
+              <section className="mb-12">
+                <HealthScoreGauge data={{ ...results, all_tests: allTests }} />
+              </section>
+
+              <section className="mb-12">
+                <div className="mb-8">
+                  <TrendRibbon tests={allTests} />
+                </div>
                 <div>
-                  <h3 className="font-semibold text-base" style={{ color: 'var(--zen-text)' }}>
-                    Questions for Your Doctor
-                  </h3>
-                  <p className="text-xs" style={{ color: 'var(--zen-text-faint)' }}>
-                    Bring these to your next appointment
+                  <h3 className="font-semibold text-base mb-1" style={{ color: 'var(--zen-text)' }}>Your Biomarkers</h3>
+                  <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
+                    Tap any card to see a plain-English explanation
                   </p>
+                  <HumanReadableTests tests={allTests} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => navigator.clipboard.writeText(doctorQuestions.join('\n'))}
-                    className="zen-btn-ghost"
-                    style={{ fontSize: '0.72rem', padding: '6px 12px' }}
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy All
-                  </button>
-                  <button
-                    onClick={() => {/* triggers PDF download */}}
-                    className="zen-btn-primary"
-                    style={{ fontSize: '0.72rem', padding: '6px 12px', borderRadius: '10px' }}
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    Generate Report
-                  </button>
-                </div>
-              </div>
+              </section>
+            </motion.div>
+          )}
 
-              <div className="space-y-2">
-                {displayedQuestions.map((q: string, i: number) => (
-                  <div
-                    key={i}
-                    className="zen-glass-solid p-4 flex gap-3 items-start cursor-pointer group"
-                    style={{ borderRadius: '14px' }}
-                    onClick={() => navigator.clipboard.writeText(q)}
-                  >
-                    <span
-                      className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{ background: 'var(--zen-brand)', color: 'var(--zen-brand-text)' }}
-                    >
-                      {i + 1}
-                    </span>
-                    <p className="flex-1 text-sm leading-relaxed" style={{ color: 'var(--zen-text-secondary)' }}>
-                      {q}
-                    </p>
-                    <Copy
-                      className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      style={{ color: 'var(--zen-text-faint)' }}
-                    />
+          {/* ─── TAB: Action Plan ─── */}
+          {activeTab === 'plan' && (
+            <motion.div
+              key="plan"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <section className="mb-12">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <AIInsightCards data={results} />
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <PathToNormal pathData={results.path_to_normal} />
+                  </div>
+                </div>
+              </section>
 
-              {doctorQuestions.length > 3 && (
-                <button
-                  onClick={() => setShowAllQuestions(!showAllQuestions)}
-                  className="zen-btn-ghost mt-3 mx-auto"
-                  style={{ display: 'flex', fontSize: '0.75rem' }}
-                >
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllQuestions ? 'rotate-180' : ''}`} />
-                  {showAllQuestions ? 'Show less' : `Show all ${doctorQuestions.length} questions`}
-                </button>
+              {doctorQuestions.length > 0 && (
+                <section className="mb-12">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="font-semibold text-base" style={{ color: 'var(--zen-text)' }}>Questions for Your Doctor</h3>
+                      <p className="text-xs" style={{ color: 'var(--zen-text-faint)' }}>Bring these to your next appointment</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {displayedQuestions.map((q: string, i: number) => (
+                      <div key={i} className="zen-glass-solid p-4 flex gap-3 items-start cursor-pointer group" style={{ borderRadius: '14px' }} onClick={() => navigator.clipboard.writeText(q)}>
+                        <span className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--zen-brand)', color: 'var(--zen-brand-text)' }}>{i + 1}</span>
+                        <p className="flex-1 text-sm leading-relaxed" style={{ color: 'var(--zen-text-secondary)' }}>{q}</p>
+                        <Copy className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--zen-text-faint)' }} />
+                      </div>
+                    ))}
+                  </div>
+                  {doctorQuestions.length > 3 && (
+                    <button onClick={() => setShowAllQuestions(!showAllQuestions)} className="zen-btn-ghost mt-3 mx-auto" style={{ display: 'flex', fontSize: '0.75rem' }}>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllQuestions ? 'rotate-180' : ''}`} />
+                      {showAllQuestions ? 'Show less' : `Show all ${doctorQuestions.length} questions`}
+                    </button>
+                  )}
+                </section>
               )}
             </motion.div>
-          </section>
-        )}
+          )}
 
-        {/* ─── SECTION: Specialists + Resources ─── */}
-        <section id="resources" className="mb-12 scroll-mt-32">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Specialists */}
+          {/* ─── TAB: Resources ─── */}
+          {activeTab === 'resources' && (
             <motion.div
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4, duration: 0.4 }}
+              key="resources"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
             >
-              <DrNearby specialists={results.recommended_specialists} />
-            </motion.div>
+              <section className="mb-12">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div>
+                    <DrNearby specialists={results.recommended_specialists} />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <div className="zen-glass-solid p-6" style={{ borderRadius: '20px' }}>
+                      <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--zen-text)' }}>Export Your Report</h3>
+                      <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>Download a comprehensive PDF with all findings</p>
+                      <DownloadPDF analysisData={results} />
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-            {/* Download PDF */}
-            <motion.div
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.45, duration: 0.4 }}
-              className="flex flex-col justify-end"
-            >
-              <div className="zen-glass-solid p-6" style={{ borderRadius: '20px' }}>
-                <h3 className="font-semibold text-base mb-2" style={{ color: 'var(--zen-text)' }}>
-                  Export Your Report
-                </h3>
-                <p className="text-xs mb-4" style={{ color: 'var(--zen-text-faint)' }}>
-                  Download a comprehensive PDF with all findings
-                </p>
-                <DownloadPDF analysisData={results} />
-              </div>
+              <section className="mb-12">
+                <SmartArticles resources={results.curated_resources} />
+              </section>
             </motion.div>
-          </div>
-        </section>
-
-        {/* Resources Hub */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-          className="mb-12"
-        >
-          <SmartArticles resources={results.curated_resources} />
-        </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Analyze Another */}
         <motion.div
