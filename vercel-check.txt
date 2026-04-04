@@ -1,0 +1,3 @@
+Force redeploy check: 2026-04-03
+Reason: Forcing Vercel to see the fresh main branch head.
+Hash: 03e27951535eae98c7600c34b108836597333afa
