@@ -1,13 +1,31 @@
-# MediSense AI
+# 🛡️ Code-Blooded: MediSense AI
 
-MediSense AI is a fast, intelligent backend service that analyzes clinical pathology lab reports (PDFs) and transforms them into patient-friendly insights and beautifully designed PDF health reports. Powered by Google's new **Gemini 3 Flash** model, MediSense AI understands complex medical terminology, extracts structured test data, identifies clinical patterns, and provides a digestible health score.
+### 👥 Team Members
+1. **Anurag Patil**
+2. **Vedant Patil**
 
-## Features
-- **PDF Data Extraction**: Seamlessly parses text from digital pathology reports using `pypdf`.
-- **Intelligent Medical Analysis**: Distills complex biometric markers into a comprehensive JSON format using `google-genai` and the Gemini 3 Flash model.
-- **Scoring System**: Calculates an overall health score (0-100) and grade (Excellent to Poor) based on extracted biomarkers.
-- **Export to PDF**: Dynamically renders visually rich, multi-page PDF health summaries directly from the API utilizing `reportlab`. The exported report includes score dials, actionable lifestyle tips, and dynamic clinical patterns.
-- **RESTful API**: Built horizontally scalable and exceptionally fast with **FastAPI**.
+---
+
+## 📝 Description
+**MediSense AI** is a cutting-edge health-tech solution designed to bridge the gap between complex medical data and patient understanding. By leveraging the power of **Google Gemini 3 Flash**, the application intelligently analyzes pathology lab reports (PDFs), extracts critical biomarkers, and translates them into a visually stunning, patient-friendly health summary.
+
+Whether you're a patient trying to understand your blood work or a healthcare provider looking for a faster way to summarize data, MediSense AI provides actionable insights, health scoring, and personalized lifestyle recommendations in seconds.
+
+## ✨ Key Features
+
+### 🖥️ Frontend (Next.js)
+- **Modern UI/UX**: A sleek, responsive dashboard built with **Next.js** and **Tailwind CSS**.
+- **Instant Uploads**: Easy-to-use interface for uploading medical PDFs.
+- **Dynamic Dashboards**: Visualize your health score and biomarkers with interactive charts.
+- **Real-time Results**: See your analysis as soon as the backend processes it.
+
+### ⚙️ Backend (FastAPI & Gemini AI)
+- **Deep Medical Analysis**: Uses **Gemini 3 Flash** to understand medical context beyond just numbers.
+- **Smart Data Extraction**: Seamlessly parses text from PDF reports using `pypdf`.
+- **Health Scoring System**: Generates a health score (0-100) based on clinical patterns.
+- **Professional PDF Export**: Generates a high-quality, multi-page PDF report with graphical dials and clinical insights using `reportlab`.
+- **Clinical Pattern Recognition**: Identifies relationships between different biomarkers (e.g., Vitamin D and Calcium).
+- **Specialist Recommendations**: (Internal) Map-integrated clinical suggestions based on your report.
 
 ## Getting Started
 
