@@ -12,6 +12,37 @@ function urgencyStyle(urgency: string) {
   }
 }
 
+function renderNarrative(text: string) {
+  if (!text) return null;
+  
+  // Try to split on bullet points or newlines
+  const lines = text.split(/\n+/).filter(line => line.trim() !== '');
+  
+  return (
+    <ul className="space-y-4">
+      {lines.map((line, i) => {
+        const cleanLine = line.replace(/^[\s*-]+/, '').trim();
+        
+        // Split for bold tags
+        const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+        return (
+          <li key={i} className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: 'var(--zen-text-secondary)' }}>
+            <span className="mt-2 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'var(--zen-brand)' }} />
+            <span>
+              {parts.map((part, j) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                  return <strong key={j} style={{ color: 'var(--zen-text)' }} className="font-semibold">{part.slice(2, -2)}</strong>;
+                }
+                return <span key={j}>{part}</span>;
+              })}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default function AIInsightCards({ data }: { data: any }) {
   const narrative = data.doctors_narrative || data.health_summary || '';
   const patterns = data.patterns || [];
@@ -71,10 +102,8 @@ export default function AIInsightCards({ data }: { data: any }) {
           transition={{ duration: 0.25 }}
         >
           {slide.type === 'narrative' ? (
-            <div>
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--zen-text-secondary)' }}>
-                {slide.content}
-              </p>
+            <div className="pt-2 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
+              {renderNarrative(slide.content)}
             </div>
           ) : (
             <PatternSlide pattern={slide.content} />

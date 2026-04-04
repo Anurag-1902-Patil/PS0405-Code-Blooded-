@@ -20,7 +20,7 @@ JSON Structure Requirements:
   "health_score": 0,
   "health_grade": "Excellent/Good/Fair/Poor",
   "health_summary": "Short 1-2 sentence intro summary.",
-  "doctors_narrative": "A professional causal analysis explaining 'what is what' and 'what leads to what'. Explain interactions between markers (e.g. high Triglycerides + borderline Glucose -> Metabolic syndrome risk).",
+  "doctors_narrative": "A professional causal analysis explaining 'what is what' and 'what leads to what'. MUST be formatted as a cleanly spaced markdown bulleted list using '- ' for each point.",
   "tests": [
     {{
       "test_name": "Name",
