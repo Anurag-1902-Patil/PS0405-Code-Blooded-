@@ -21,20 +21,67 @@ app.add_middleware(
 class MedicalTest(BaseModel):
     test_name: str
     value: float | str
+    unit: str
     status: str
+    reference_range: str
+    deviation_pct: float
+    explanation: str
+    category: str
+    severity: str
+    gauge_position: float
+
+class PathToNormal(BaseModel):
+    dietary_swaps: List[str]
+    activity_prescription: str
+
+class Resource(BaseModel):
+    title: str
+    url: str
+
+class CuratedResources(BaseModel):
+    youtube: List[Resource]
+    articles: List[Resource]
+
+class Specialist(BaseModel):
+    specialty: str
+    emoji: str
+    reason: str
+    maps_query: str
+
+class MedicalPattern(BaseModel):
+    name: str
+    confidence: float
+    urgency: str
+    severity: str
+    explanation: str
+    symptoms: List[str]
+    doctor_questions: List[str]
+    dietary_note: str
+    icd10: str
+    matched_tests: List[str]
 
 class AnalysisResponse(BaseModel):
     health_score: int
     health_grade: str
     health_summary: str
+    doctors_narrative: str
     tests: List[MedicalTest]
+    patterns: Optional[List[MedicalPattern]] = []
+    path_to_normal: PathToNormal
+    curated_resources: CuratedResources
+    recommended_specialists: Optional[List[Specialist]] = []
 
 @app.get("/")
 def home():
     return {"status": "online", "engine": "Gemini 3 Flash"}
 
 @app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_report(file: UploadFile = File(...)):
+async def analyze_report(
+    file: UploadFile = File(...),
+    age: int = Form(30),
+    gender: str = Form("Male"),
+    language: str = Form("English"),
+):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     try:
@@ -45,9 +92,12 @@ async def analyze_report(file: UploadFile = File(...)):
         if not text.strip():
             raise HTTPException(status_code=422, detail="Could not extract text from PDF.")
 
-        logger.info(f"Analyzing file: {file.filename}")
+        # Map gender string to M/F for the analyzer
+        gender_code = "M" if gender.lower().startswith("m") else "F"
+
+        logger.info(f"Analyzing file: {file.filename} (age={age}, gender={gender_code})")
         analyzer = get_analyzer()
-        result = analyzer.analyze(text, 41, "M")
+        result = analyzer.analyze(text, age, gender_code)
 
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])

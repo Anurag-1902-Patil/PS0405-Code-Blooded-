@@ -282,6 +282,8 @@ def _styles():
                           fontName="Helvetica-Bold", leading=13),
         "pattern_body":S("pattern_body",fontSize=8,textColor=colors.HexColor("#374151"),
                           fontName="Helvetica", leading=12),
+        "specialist_name": S("spec_name", fontSize=10, textColor=C_NAVY, fontName="Helvetica-Bold", leading=14),
+        "spec_reason": S("spec_reason", fontSize=8.5, textColor=colors.HexColor("#4B5563"), fontName="Helvetica", leading=12),
     }
 
 # ─────────────────────────────────────────────────────────────
@@ -762,6 +764,57 @@ def generate_pdf(
             ]))
             story.append(KeepTogether([pat_outer, Spacer(1, 8)]))
 
+    # ── RECOMMENDED SPECIALISTS ──────────────────────────────
+    recom_specs = analysis.get("recommended_specialists", [])
+    if recom_specs:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("Clinical Consultations — Recommended Specialists", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=8))
+        story.append(Paragraph(
+            "Based on your results, consulting with these specialists is recommended to further investigate specific markers.",
+            S["small"]))
+        story.append(Spacer(1, 8))
+
+        spec_cards = []
+        for spec in recom_specs:
+            name   = spec.get("specialty", "General Physician")
+            emoji  = spec.get("emoji", "🩺")
+            reason = spec.get("reason", "")
+            query  = spec.get("maps_query", f"{name} near me")
+            maps_url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
+
+            card_content = [
+                Paragraph(f"{emoji} {name}", S["specialist_name"]),
+                Paragraph(reason, S["spec_reason"]),
+                Spacer(1, 4),
+                Paragraph(f'<u><a href="{maps_url}" color="blue">Find Nearby {name} on Google Maps →</a></u>', S["link"]),
+            ]
+            
+            card_table = Table([[c] for c in card_content], colWidths=[(W-36*mm)/2 - 12])
+            card_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,-1), C_GREY_BG),
+                ("BOX",           (0,0), (-1,-1), 0.5, C_BORDER),
+                ("TOPPADDING",    (0,0), (-1,-1), 10),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+                ("LEFTPADDING",   (0,0), (-1,-1), 10),
+                ("RIGHTPADDING",  (0,0), (-1,-1), 10),
+            ]))
+            spec_cards.append(card_table)
+
+        # Chunk cards into pairs
+        card_rows = []
+        for i in range(0, len(spec_cards), 2):
+            row = spec_cards[i:i+2]
+            if len(row) < 2: row.append(Spacer(1,1))
+            card_rows.append(row)
+
+        layout_table = Table(card_rows, colWidths=[(W-36*mm)/2]*2)
+        layout_table.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 12),
+        ]))
+        story.append(layout_table)
+
     # ── DOCTOR QUESTIONS ─────────────────────────────────────
     if dq:
         story.append(Spacer(1, 4))
@@ -793,6 +846,130 @@ def generate_pdf(
             ("TEXTCOLOR",     (0,1), (0,-1), C_NAVY),
         ]))
         story.append(dq_table)
+
+    # ── CURATED RESOURCE LIBRARY ──────────────────────────────
+    if curated_resources:
+        story.append(PageBreak())
+        story.append(Paragraph("Curated Resource Library", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+        story.append(Paragraph(
+            "These links are AI-curated based on YOUR specific findings from reputable sources.",
+            S["small"]))
+        story.append(Spacer(1, 8))
+        
+        yt = curated_resources.get("youtube", [])
+        articles = curated_resources.get("articles", [])
+        
+        res_rows = [["Type", "Recommended Resource"]]
+        for vid in yt:
+            vurl = vid.get('url', '')
+            res_rows.append([
+                Paragraph("<b>Video</b>", S["cell"]),
+                Paragraph(f"{vid.get('title','')} - <link href=\"{vurl}\" color=\"#1A56DB\">Watch Here</link>", S["link"])
+            ])
+        for art in articles:
+            aurl = art.get('url', '')
+            res_rows.append([
+                Paragraph("<b>Article</b>", S["cell"]),
+                Paragraph(f"{art.get('title','')} - <link href=\"{aurl}\" color=\"#1A56DB\">Read Here</link>", S["link"])
+            ])
+
+        if len(res_rows) > 1:
+            res_table = Table(res_rows, colWidths=[60, W-36*mm-60])
+            res_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,0), C_NAVY),
+                ("TEXTCOLOR",     (0,0), (-1,0), C_WHITE),
+                ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",      (0,0), (-1,-1), 9),
+                ("TOPPADDING",    (0,0), (-1,-1), 6),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+                ("LEFTPADDING",   (0,0), (-1,-1), 8),
+                ("GRID",          (0,0), (-1,-1), 0.4, C_BORDER),
+                ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_WHITE, C_GREY_BG]),
+                ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ]))
+            story.append(res_table)
+
+    # ── PATH TO NORMAL ─────────────────────────────────────────
+    if path_to_normal:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("Path to Normal — Action Plan", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+        
+        diet_swaps = path_to_normal.get("dietary_swaps", [])
+        activity = path_to_normal.get("activity_prescription", "")
+
+        sub_rows = []
+        if diet_swaps:
+            sub_rows.append([Paragraph("<b>Specific Dietary Swaps</b>", S["body_bold"])])
+            for swap in diet_swaps:
+                sub_rows.append([Paragraph(f"• {swap}", S["body"])])
+        
+        if activity:
+            sub_rows.append([Spacer(1, 4)])
+            sub_rows.append([Paragraph("<b>Activity Prescription</b>", S["body_bold"])])
+            sub_rows.append([Paragraph(activity, S["body"])])
+
+        if sub_rows:
+            path_table = Table(sub_rows, colWidths=[W - 36*mm])
+            path_table.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,-1), C_LIGHT_BLUE),
+                ("TOPPADDING",    (0,0), (-1,-1), 8),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+                ("LEFTPADDING",   (0,0), (-1,-1), 12),
+                ("BOX",           (0,0), (-1,-1), 0.5, C_BLUE),
+            ]))
+            story.append(path_table)
+
+    # ── NORMAL VALUES REFERENCE TABLE ─────────────────────────
+    if normal:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("Your Normal Results — Keep It Up!", S["h1"]))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=C_GREEN, spaceAfter=6))
+
+        norm_rows = [["Test", "Your Value", "Normal Range", "Category", "Notes"]]
+        for t in normal:
+            norm_rows.append([
+                t.get("test_name", ""),
+                f"{t.get('value','')} {t.get('unit','')}",
+                t.get("reference_range", "—"),
+                t.get("category", "—"),
+                "✓ Keep maintaining your current lifestyle.",
+            ])
+
+        norm_table = Table(norm_rows, colWidths=[110, 70, 90, 70, 175])
+        norm_table.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0), C_GREEN),
+            ("TEXTCOLOR",     (0,0), (-1,0), C_WHITE),
+            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("TOPPADDING",    (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("LEFTPADDING",   (0,0), (-1,-1), 6),
+            ("GRID",          (0,0), (-1,-1), 0.4, C_BORDER),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_GREEN_BG, C_WHITE]),
+            ("ALIGN",         (1,0), (3,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        story.append(norm_table)
+
+    # ── DISCLAIMER ────────────────────────────────────────────
+    story.append(Spacer(1, 16))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER, spaceAfter=6))
+    story.append(Paragraph(
+        "DISCLAIMER: This report is generated by MediSense AI for educational purposes only. "
+        "It does not constitute a final diagnosis, medical advice, or treatment. "
+        "Always consult a qualified healthcare professional before making any health decisions.",
+        S["disclaimer"]
+    ))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        f"Generated by MediSense AI  •  {date_str}  •  For personal use only",
+        S["disclaimer"]
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
 
     # ── CURATED RESOURCE LIBRARY ──────────────────────────────
     if curated_resources:

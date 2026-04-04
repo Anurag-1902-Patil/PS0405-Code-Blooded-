@@ -35,14 +35,38 @@ JSON Structure Requirements:
       "gauge_position": 0.5
     }}
   ],
+  "patterns": [
+    {{
+      "name": "Clinical Pattern name (e.g., Metabolic Syndrome, Iron Deficiency Anemia)",
+      "confidence": 0.0,
+      "urgency": "low/moderate/high",
+      "severity": "mild/moderate/moderate-severe/severe",
+      "explanation": "Describe how these specific test values interact to suggest this pattern.",
+      "symptoms": ["Specific symptoms to watch for"],
+      "doctor_questions": ["High-quality questions to ask a specialist about this"],
+      "dietary_note": "A specific dietary recommendation for this pattern.",
+      "icd10": "Related ICD-10 code string",
+      "matched_tests": ["List of test names from above that triggered this pattern"]
+    }}
+  ],
   "path_to_normal": {{
     "dietary_swaps": ["Direct replacements (e.g., 'Replace red meat with plant-based proteins to reduce kidney load')"],
-    "activity_prescription": "Specific exercise types (e.g., Aerobic vs Resistance) based on findings."
+    "activity_prescription": "Specific exercise type recommendations based on findings."
   }},
   "curated_resources": {{
     "youtube": [{{"title": "Title (e.g. Mayo Clinic: Understanding Cholesterol)", "url": "Actual or constructed search url"}}],
-    "articles": [{{"title": "American Heart Association / NIDDK article", "url": "Actual URL"}}]
-  }}
+    "articles": [
+      {{"title": "Accurate Article Title from Reputable Source (e.g. American Heart Association)", "url": "Actual URL for a relevant health article"}}
+    ]
+  }},
+  "recommended_specialists": [
+    {{
+      "specialty": "Specialist Type (e.g., Cardiologist, Endocrinologist)",
+      "emoji": "🫀",
+      "reason": "Clear explanation of why this specialist is needed (e.g., 'To evaluate elevated Lipid levels and heart health').",
+      "maps_query": "Specialist Type near me"
+    }}
+  ]
 }}
 
 REPORT: {report_text}"""
@@ -64,7 +88,7 @@ class MedicalAnalyzer:
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-3-flash-preview", # <--- THE CRITICAL FIX
+                model="gemini-2.5-flash", # Updated to a supported model
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
